@@ -15,7 +15,6 @@ import json
 
 st.set_page_config(page_title="Caltrain Platform", page_icon="🚆", layout="wide")
 
-
 @st.cache_resource(ttl="60s")
 def ping_train() -> dict:
     # URL for the 511 Transit API
@@ -31,7 +30,6 @@ def ping_train() -> dict:
 
         # Parse the decoded content into JSON
         data = json.loads(decoded_content)
-
     else:
         return False
 
@@ -43,13 +41,9 @@ def ping_train() -> dict:
             .replace(tzinfo=pytz.utc) \
             .astimezone(pytz.timezone('US/Pacific')) \
             .strftime('%I:%M %p')
-        return data#, api_live_responsetime
+        return data
 
-
-
-#data, api_live_responsetime = ping_train()
 API_RESPONSE_DATA = ping_train()
-
 
 def create_caltrain_dfs(data: dict) -> pd.DataFrame:
     """Ping 511 API and reformat the data"""
@@ -147,9 +141,7 @@ def create_caltrain_dfs(data: dict) -> pd.DataFrame:
     trains_df["AimedDepartureTimeETA"] = trains_df["AimedDepartureTime"] - trains_df["Current Time"]
     trains_df["Train #"] = trains_df["id"]
     trains_df["Direction"] = trains_df["direction"]
-    
     return trains_df
-
 
 def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
     """Clean up the dataframe for display"""
@@ -182,7 +174,6 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
         "Distance to Station",
         "Stops Away",
         #"API Time"
-        
     ]
 
     data = data.T
@@ -191,28 +182,16 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
 
     return data
 
-
 if API_RESPONSE_DATA is not False:
     caltrain_data = create_caltrain_dfs(API_RESPONSE_DATA)
 else:
     caltrain_data = False
 
-#st.title("🚊 Caltrain Platform 🚂")
 current_time2 = datetime.datetime.now()
 current_time = current_time2.strftime("%I:%M %p")
-#st.title(f"{current_time}")
 
 caltrain_stations = pd.read_csv("stop_ids.csv")
 col1, col2 = st.columns([2, 1])
-
-# col1.markdown(
-#     """
-#     Track when the next trains leave from your station and where they are right now. Choose a destination to filter for trains that stop there.
-#     """
-# )
-
-# chosen_station = 'San Mateo'
-# chosen_destination = '--'
 
 with st.expander('Change Stations and Schedule Type', expanded=False):
     col1, col2 = st.columns(2)  # Define two columns for layout
@@ -248,17 +227,10 @@ else:
     )
     schedule_chosen = False
 
-
-####
 col1, col2 = st.columns([2, 1])
-# api_working = True if type(caltrain_data) == pd.DataFrame else False
-# scheduled = False
-####
-
 
 if display == "Scheduled":
     scheduled = True
-    # col1, col2 = st.columns([2, 1])
     if schedule_chosen:
         col1.info("📆 Pulling the current schedule from the Caltrain website...")
     else:
@@ -279,8 +251,6 @@ if display == "Scheduled":
                 get_schedule("southbound", chosen_station, chosen_destination),
             ]
         )
-    #col1, col2 = st.columns([2, 1])
-
 
     # Sort by ETA
     caltrain_data = caltrain_data.sort_values(by=["ETA"])
@@ -294,8 +264,6 @@ if display == "Scheduled":
     caltrain_data_sb.index = caltrain_data_sb.index + 1
 
     col1, col2 = st.columns([2, 1])
-
-
 
     # Display the dataframes split by Train #, Scheduled Departure, Current Stop and the other columns
     col1.subheader(f"Northbound Trains - {current_time}")
@@ -335,8 +303,6 @@ else:
         .dt.tz_convert("US/Pacific")
         .dt.strftime("%I:%M %p")
     )
-
-    
 
     # Filter for destinations
     valid_destinations = [
@@ -385,12 +351,10 @@ col1.markdown("---")
 col1.subheader("Definitions")
 col1.markdown(
     """
-1. **Train Number** - The train ID. The first digit indicates the train type.
-2. **Train Type** - Local trains make all stops. Limited and Bullet make fewer.
-3. **Departure Time** - The scheduled departure time of the train from the **Origin** station.
-4. **ETA** - The estimated number of hours and minutes before the train arrives.
-5. **Distance to Station** - The distance from the train to the **Origin** station.
-6. **Stops Away** - The number of stops until the train reaches the **Origin** station.
+1. **API Arrival** - Expected Arrival Time of Train based on 511 API
+2. **Scheduled Depature** - Aimed Depature from Station (Should match the schedule of the train)
+3. **Distance to Station** - The distance from the train to the **Origin** station.
+4. **Stops Away** - The number of stops until the train reaches the **Origin** station.
 """
 )
 
