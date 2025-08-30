@@ -3,3 +3,4 @@ venv/
 *.ipynb
 config.yaml
 secrets.toml
+*.pyc

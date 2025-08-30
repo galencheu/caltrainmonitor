@@ -13,7 +13,7 @@ from geopy.distance import geodesic
 import requests
 import json
 
-st.set_page_config(page_title="Caltrain Platform", page_icon="🚆", layout="centered")
+st.set_page_config(page_title="Caltrain Platform", page_icon="🚆", layout="wide")
 
 
 @st.cache_resource(ttl="60s")
@@ -42,11 +42,16 @@ def ping_train() -> dict:
 
 
 data = ping_train()
-
+api_live_responsetime = data["Siri"]["ServiceDelivery"]["ResponseTimestamp"]
+api_live_responsetime = datetime.datetime.strptime(api_live_responsetime, '%Y-%m-%dT%H:%M:%SZ') \
+    .replace(tzinfo=pytz.utc) \
+    .astimezone(pytz.timezone('US/Pacific')) \
+    .strftime('%I:%M %p')
 
 def create_caltrain_dfs(data: dict) -> pd.DataFrame:
     """Ping 511 API and reformat the data"""
     trains = []
+
     for train in data["Siri"]["ServiceDelivery"]["VehicleMonitoringDelivery"]["VehicleActivity"]:
         train_obj = train["MonitoredVehicleJourney"]
 
@@ -128,30 +133,43 @@ def create_caltrain_dfs(data: dict) -> pd.DataFrame:
     )
     trains_df["distance"] = trains_df["distance"].round(1).astype("str") + " mi"
     trains_df["Departure Time"] = trains_df["expected_arrival_time"]
+    trains_df["Scheduled Time"] = trains_df["aimed_arrival_time"]
     trains_df["Current Time"] = datetime.datetime.now(pytz.timezone("UTC"))
     trains_df["ETA"] = trains_df["Departure Time"] - trains_df["Current Time"]
+    trains_df["ScheduledETA"] = trains_df["Scheduled Time"] - trains_df["Current Time"]
     trains_df["Train #"] = trains_df["id"]
     trains_df["Direction"] = trains_df["direction"]
+    
     return trains_df
 
 
 def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
     """Clean up the dataframe for display"""
     # Filter for desired columns
-    data = data[["Train #", "Train Type", "Departure Time", "ETA", "distance", "stops_away"]]
+    #data = data[["Train #", "Departure Time", "Scheduled Time", "ETA", "distance", "stops_away"]] #Train Type
     data["ETA"] = data["ETA"].apply(lambda x: int(x.total_seconds() / 60))
     data["ETA"] = data["ETA"].astype("str") + " min"
+    data["ScheduledETA"] = data["ScheduledETA"].apply(lambda x: int(x.total_seconds() / 60))
+    data["ScheduledETA"] = data["ScheduledETA"].astype("str") + " min"
 
     # data["ETA"] = data["ETA"].apply(lambda x: f"{int(x // 60)} hr {int(x % 60)} min")
+    data["API Time"] = data.apply(lambda row: f"{row['Departure Time']} // Train in {row['ETA']}", axis=1)
+    data["Scheduled Time"] = data.apply(lambda row: f"{row['Departure Time']} // Train in {row['ScheduledETA']}", axis=1)
+
+
+    #Select columns desired
+    data = data[["Train #", "API Time", "Scheduled Time", "distance", "stops_away"]] 
 
     # Rename the columns
     data.columns = [
         "Train #",
-        "Train Type",
-        "Departure Time",
-        "ETA",
+        #"Train Type",
+        "API Depature",
+        "Scheduled Depature",
+        #"ETA",
         "Distance to Station",
         "Stops Away",
+        #"API Time"
     ]
 
     data = data.T
@@ -166,21 +184,34 @@ if data is not False:
 else:
     caltrain_data = False
 
-st.title("🚊 Caltrain Platform 🚂")
+#st.title("🚊 Caltrain Platform 🚂")
+current_time2 = datetime.datetime.now()
+current_time = current_time2.strftime("%I:%M %p")
+#st.title(f"{current_time}")
+
 caltrain_stations = pd.read_csv("stop_ids.csv")
 col1, col2 = st.columns([2, 1])
 
-col1.markdown(
-    """
-    Track when the next trains leave from your station and where they are right now. Choose a destination to filter for trains that stop there.
-    """
-)
+# col1.markdown(
+#     """
+#     Track when the next trains leave from your station and where they are right now. Choose a destination to filter for trains that stop there.
+#     """
+# )
 
-col1, col2 = st.columns([2, 1])
-chosen_station = col1.selectbox("Choose Origin Station", caltrain_stations["stopname"], index=10)
-chosen_destination = col1.selectbox(
-    "Choose Destination Station", ["--"] + caltrain_stations["stopname"].tolist(), index=0
-)
+# chosen_station = 'San Mateo'
+# chosen_destination = '--'
+
+with st.expander('Change Stations and Schedule Type', expanded=False):
+    col1, col2 = st.columns(2)  # Define two columns for layout
+
+    # Select origin station
+    chosen_station = col1.selectbox("Choose Origin Station", caltrain_stations["stopname"], index=8)  # Index 8 is San Mateo
+
+    # Select destination station
+    chosen_destination = col1.selectbox(
+        "Choose Destination Station", ["--"] + caltrain_stations["stopname"].tolist(), index=0
+    )
+
 api_working = True if type(caltrain_data) == pd.DataFrame else False
 scheduled = False
 
@@ -204,9 +235,17 @@ else:
     )
     schedule_chosen = False
 
+
+####
+col1, col2 = st.columns([2, 1])
+# api_working = True if type(caltrain_data) == pd.DataFrame else False
+# scheduled = False
+####
+
+
 if display == "Scheduled":
     scheduled = True
-    col1, col2 = st.columns([2, 1])
+    # col1, col2 = st.columns([2, 1])
     if schedule_chosen:
         col1.info("📆 Pulling the current schedule from the Caltrain website...")
     else:
@@ -227,43 +266,54 @@ if display == "Scheduled":
                 get_schedule("southbound", chosen_station, chosen_destination),
             ]
         )
+    #col1, col2 = st.columns([2, 1])
+
 
     # Sort by ETA
     caltrain_data = caltrain_data.sort_values(by=["ETA"])
+    caltrain_data["Train #"] = caltrain_data["Train #"].map(lambda c: f"{assign_train_type(c)}-{c}")
     caltrain_data_nb = caltrain_data.query("Direction == 'NB'").drop("Direction", axis=1)
     caltrain_data_sb = (
         caltrain_data.query("Direction == 'SB'").drop("Direction", axis=1).reset_index(drop=True)
     )
-
     # Reset the index to 1, 2, 3.
     caltrain_data_nb.index = caltrain_data_nb.index + 1
     caltrain_data_sb.index = caltrain_data_sb.index + 1
 
     col1, col2 = st.columns([2, 1])
 
+
+
     # Display the dataframes split by Train #, Scheduled Departure, Current Stop and the other columns
-    col1.subheader("Northbound Trains")
+    col1.subheader(f"Northbound Trains - {current_time}")
     nb_data = caltrain_data_nb.T
     nb_data.columns = nb_data.iloc[0]
     nb_data = nb_data.drop(nb_data.index[0])
     col1.dataframe(nb_data, use_container_width=True)
 
-    col1.subheader("Southbound Trains")
+    col1.subheader(f"Southbound Trains - {current_time}")
     sb_data = caltrain_data_sb.T
     sb_data.columns = sb_data.iloc[0]
     sb_data = sb_data.drop(sb_data.index[0])
     col1.dataframe(sb_data, use_container_width=True)
 
 else:
-    col1.info("✅ Caltrain API is up and running")
-
+    col1.info(f"✅ Caltrain API is up and running 🚂 Time via API is {api_live_responsetime}")
     caltrain_data["Train Type"] = caltrain_data["Train #"].apply(lambda x: assign_train_type(x))
+    caltrain_data["Train #"] = caltrain_data["Train #"].map(lambda c: f"{assign_train_type(c)}-{c}")
 
     caltrain_data["Departure Time"] = (
         pd.to_datetime(caltrain_data["Departure Time"])
         .dt.tz_convert("US/Pacific")
         .dt.strftime("%I:%M %p")
     )
+    caltrain_data["Scheduled Time"] = (
+        pd.to_datetime(caltrain_data["Scheduled Time"])
+        .dt.tz_convert("US/Pacific")
+        .dt.strftime("%I:%M %p")
+    )
+
+    
 
     # Filter for destinations
     valid_destinations = [
@@ -285,7 +335,7 @@ else:
     # # Display the dataframes split by Train #, Scheduled Departure, Current Stop and the other columns
 
     # Northbound Trains
-    col1.subheader("Northbound Trains")
+    col1.subheader(f"Northbound Trains - {current_time}")
     nb_trains = caltrain_data.query("Direction == 'NB'").drop("Direction", axis=1)
     nb_trains = nb_trains.sort_values(by=["ETA"])
     nb_trains = nb_trains[nb_trains["stopname"] == chosen_station]
@@ -296,7 +346,7 @@ else:
         col1.dataframe(clean_up_df(nb_trains), use_container_width=True)
 
     # Southbound trains
-    col1.subheader("Southbound Trains")
+    col1.subheader(f"Southbound Trains - {current_time}")
     sb_data = caltrain_data.query("direction == 'SB'").drop("direction", axis=1)
     sb_data = sb_data.sort_values(by=["ETA"])
     sb_data = sb_data[sb_data["stopname"] == chosen_station]
@@ -306,8 +356,6 @@ else:
     else:
         col1.dataframe(clean_up_df(sb_data), use_container_width=True)
 
-if col1.button("Refresh Data"):
-    st.experimental_rerun()
 
 # Definitions
 col1.markdown("---")
@@ -337,7 +385,3 @@ with col1:
     st.markdown("---")
 
 col1, col2 = st.columns([1, 1])
-with col1:
-    badge("twitter", "TYLERSlMONS", "https://twitter.com/TYLERSlMONS")
-with col2:
-    badge("github", "tyler-simons/caltrain", "https://github.com/tyler-simons/caltrain")

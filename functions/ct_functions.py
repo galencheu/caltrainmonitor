@@ -6,7 +6,6 @@ import datetime
 from streamlit_extras.badges import badge
 from bs4 import BeautifulSoup
 
-
 def to_time(seconds):
     delta = datetime.timedelta(seconds=seconds)
     return (datetime.datetime.utcfromtimestamp(0) + delta).strftime("%H:%M")
@@ -38,13 +37,20 @@ def create_train_df(train):
 
 
 # Add train type where locals are 100s and 200s, limited is 300s through 600s and bullets are 700s
+# 1XX is Local, 4XX is Limited, 5XX is Express, 6XX is Weekend Local
 def assign_train_type(x):
-    if x.startswith("1") or x.startswith("2"):
+    if x.startswith("1"):
         return "Local"
-    elif x.startswith("3") or x.startswith("4") or x.startswith("5") or x.startswith("6"):
+    if x.startswith("4"):
         return "Limited"
+    if x.startswith("5"):
+        return "Express"
+    if x.startswith("6"):
+        return "Weekend"
+    if x.startswith("1"):
+        return "SouthCounty"
     else:
-        return "Bullet"
+        return "Contact Dev"
 
 
 def build_caltrain_df(stopname):
@@ -69,7 +75,6 @@ def build_caltrain_df(stopname):
     # Initialize a list to collect data
     data = []
     lat_lons = []
-    # Loop through the 'data' part of the JSON
     # Loop through the 'data' part of the JSON
     for entry in json_data["data"]:
         # Each 'entry' corresponds to a 'stop' and its 'predictions'
@@ -231,7 +236,7 @@ def get_schedule(datadirection, chosen_station, chosen_destination=None, rows_re
     html = requests.get(url).content
 
     # Parse the html
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
 
     # Get the table from the html
     table = soup.find(
@@ -256,11 +261,12 @@ def get_schedule(datadirection, chosen_station, chosen_destination=None, rows_re
     # Convert the data to a dataframe
     df = pd.DataFrame(data)
     # Shift the first row over by 1 to the right
-    first_row_vals = df.iloc[0, :][:-1]
-    df.iloc[0, :] = ["Zone"] + first_row_vals.tolist()
+    # first_row_vals = df.iloc[0, :][:-1]                   #this no longer applies
+    # df.iloc[0, :] = ["Zone"] + first_row_vals.tolist()    #this no longer applies
 
     # Drop the first column and any nas
     df = df.drop(0, axis=1)
+    df = df = df[df.iloc[:, 0].notna()] #Remove extra rows
 
     # Set the first column as the index
     df.index = df[1]
@@ -333,10 +339,10 @@ def get_schedule(datadirection, chosen_station, chosen_destination=None, rows_re
     if chosen_station in ["San Francisco"]:
         df = df[df["Direction"] != "NB"]
 
-    # Filter for only Train # 200s trains if weekday, otherwise exclude them
+    # Remove 6 trains on weekdays, 6 are weekend trains
     if not weekday:
-        df = df[df["Train #"].str.startswith("2")]
+        df = df[df["Train #"].str.startswith("6")]
     else:
-        df = df[~df["Train #"].str.startswith("2")]
+        df = df[~df["Train #"].str.startswith("6")]
 
     return df.head(rows_return)
