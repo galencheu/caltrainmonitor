@@ -38,15 +38,18 @@ def ping_train() -> dict:
     if data["Siri"]["ServiceDelivery"]["VehicleMonitoringDelivery"].get("VehicleActivity") is None:
         return False
     else:
-        return data
+        api_live_responsetime = data["Siri"]["ServiceDelivery"]["ResponseTimestamp"]
+        api_live_responsetime = datetime.datetime.strptime(api_live_responsetime, '%Y-%m-%dT%H:%M:%SZ') \
+            .replace(tzinfo=pytz.utc) \
+            .astimezone(pytz.timezone('US/Pacific')) \
+            .strftime('%I:%M %p')
+        return data#, api_live_responsetime
 
 
-data = ping_train()
-api_live_responsetime = data["Siri"]["ServiceDelivery"]["ResponseTimestamp"]
-api_live_responsetime = datetime.datetime.strptime(api_live_responsetime, '%Y-%m-%dT%H:%M:%SZ') \
-    .replace(tzinfo=pytz.utc) \
-    .astimezone(pytz.timezone('US/Pacific')) \
-    .strftime('%I:%M %p')
+
+#data, api_live_responsetime = ping_train()
+API_RESPONSE_DATA = ping_train()
+
 
 def create_caltrain_dfs(data: dict) -> pd.DataFrame:
     """Ping 511 API and reformat the data"""
@@ -65,9 +68,10 @@ def create_caltrain_dfs(data: dict) -> pd.DataFrame:
                     train_obj["MonitoredCall"]["StopPointRef"],
                     train_obj["MonitoredCall"]["AimedArrivalTime"],
                     train_obj["MonitoredCall"]["ExpectedArrivalTime"],
+                    train_obj["MonitoredCall"]["AimedDepartureTime"],
                 ]
             ],
-            columns=["stop_name", "stop_id", "aimed_arrival_time", "expected_arrival_time"],
+            columns=["stop_name", "stop_id", "aimed_arrival_time", "expected_arrival_time","AimedDepartureTime"],
         )
         destinations_df = pd.DataFrame(
             [
@@ -76,10 +80,11 @@ def create_caltrain_dfs(data: dict) -> pd.DataFrame:
                     stop["StopPointRef"],
                     stop["AimedArrivalTime"],
                     stop["ExpectedArrivalTime"],
+                    stop["AimedDepartureTime"]
                 ]
                 for stop in train_obj["OnwardCalls"]["OnwardCall"]
             ],
-            columns=["stop_name", "stop_id", "aimed_arrival_time", "expected_arrival_time"],
+            columns=["stop_name", "stop_id", "aimed_arrival_time", "expected_arrival_time","AimedDepartureTime"],
         )
         destinations_df = pd.concat([next_stop_df, destinations_df])
         destinations_df["id"] = train_obj["VehicleRef"]
@@ -103,6 +108,7 @@ def create_caltrain_dfs(data: dict) -> pd.DataFrame:
                 "stop_id",
                 "aimed_arrival_time",
                 "expected_arrival_time",
+                "AimedDepartureTime",
                 "train_longitude",
                 "train_latitude",
             ]
@@ -114,6 +120,7 @@ def create_caltrain_dfs(data: dict) -> pd.DataFrame:
     # Change to the correct types
     trains_df["aimed_arrival_time"] = pd.to_datetime(trains_df["aimed_arrival_time"])
     trains_df["expected_arrival_time"] = pd.to_datetime(trains_df["expected_arrival_time"])
+    trains_df["AimedDepartureTime"] = pd.to_datetime(trains_df["AimedDepartureTime"])
     trains_df["train_longitude"] = trains_df["train_longitude"].astype(float)
     trains_df["train_latitude"] = trains_df["train_latitude"].astype(float)
     trains_df["stop_id"] = trains_df["stop_id"].astype(float)
@@ -137,6 +144,7 @@ def create_caltrain_dfs(data: dict) -> pd.DataFrame:
     trains_df["Current Time"] = datetime.datetime.now(pytz.timezone("UTC"))
     trains_df["ETA"] = trains_df["Departure Time"] - trains_df["Current Time"]
     trains_df["ScheduledETA"] = trains_df["Scheduled Time"] - trains_df["Current Time"]
+    trains_df["AimedDepartureTimeETA"] = trains_df["AimedDepartureTime"] - trains_df["Current Time"]
     trains_df["Train #"] = trains_df["id"]
     trains_df["Direction"] = trains_df["direction"]
     
@@ -151,25 +159,30 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
     data["ETA"] = data["ETA"].astype("str") + " min"
     data["ScheduledETA"] = data["ScheduledETA"].apply(lambda x: int(x.total_seconds() / 60))
     data["ScheduledETA"] = data["ScheduledETA"].astype("str") + " min"
+    data["AimedDepartureTimeETA"] = data["AimedDepartureTimeETA"].apply(lambda x: int(x.total_seconds() / 60))
+    data["AimedDepartureTimeETA"] = data["AimedDepartureTimeETA"].astype("str") + " min"
 
     # data["ETA"] = data["ETA"].apply(lambda x: f"{int(x // 60)} hr {int(x % 60)} min")
     data["API Time"] = data.apply(lambda row: f"{row['Departure Time']} // Train in {row['ETA']}", axis=1)
     data["Scheduled Time"] = data.apply(lambda row: f"{row['Departure Time']} // Train in {row['ScheduledETA']}", axis=1)
+    data["AimedDepartureTime"] = data.apply(lambda row: f"{row['AimedDepartureTime']} // Train in {row['AimedDepartureTimeETA']}", axis=1)
 
 
     #Select columns desired
-    data = data[["Train #", "API Time", "Scheduled Time", "distance", "stops_away"]] 
+    data = data[["Train #", "API Time", "AimedDepartureTime", "distance", "stops_away", ]] 
 
     # Rename the columns
     data.columns = [
         "Train #",
         #"Train Type",
-        "API Depature",
+        "API Arrival",
         "Scheduled Depature",
+        #"Scheduled Arrival",
         #"ETA",
         "Distance to Station",
         "Stops Away",
         #"API Time"
+        
     ]
 
     data = data.T
@@ -179,8 +192,8 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
-if data is not False:
-    caltrain_data = create_caltrain_dfs(data)
+if API_RESPONSE_DATA is not False:
+    caltrain_data = create_caltrain_dfs(API_RESPONSE_DATA)
 else:
     caltrain_data = False
 
@@ -298,6 +311,11 @@ if display == "Scheduled":
     col1.dataframe(sb_data, use_container_width=True)
 
 else:
+    api_live_responsetime = API_RESPONSE_DATA["Siri"]["ServiceDelivery"]["ResponseTimestamp"]
+    api_live_responsetime = datetime.datetime.strptime(api_live_responsetime, '%Y-%m-%dT%H:%M:%SZ') \
+        .replace(tzinfo=pytz.utc) \
+        .astimezone(pytz.timezone('US/Pacific')) \
+        .strftime('%I:%M %p')
     col1.info(f"✅ Caltrain API is up and running 🚂 Time via API is {api_live_responsetime}")
     caltrain_data["Train Type"] = caltrain_data["Train #"].apply(lambda x: assign_train_type(x))
     caltrain_data["Train #"] = caltrain_data["Train #"].map(lambda c: f"{assign_train_type(c)}-{c}")
@@ -309,6 +327,11 @@ else:
     )
     caltrain_data["Scheduled Time"] = (
         pd.to_datetime(caltrain_data["Scheduled Time"])
+        .dt.tz_convert("US/Pacific")
+        .dt.strftime("%I:%M %p")
+    )
+    caltrain_data["AimedDepartureTime"] = (
+        pd.to_datetime(caltrain_data["AimedDepartureTime"])
         .dt.tz_convert("US/Pacific")
         .dt.strftime("%I:%M %p")
     )
