@@ -364,6 +364,8 @@ col1.markdown(
 - This app pulls _real-time_ data from the [511 API](https://511.org/open-data). It was created to solve the issue of arriving at the Caltrain station while the train is behind schedule. This app will tell you when the next train is leaving, and about how long it will take to arrive at the station.
 
 - **Note:** If the caltrain API is down or there aren't any trains moving, then the app will pull the current schedule from the Caltrain website instead.
+
+- Fork from [caltrain/tyler-simons](https://github.com/tyler-simons/caltrain/tree/main) with substaintial changes
 """
 )
 
