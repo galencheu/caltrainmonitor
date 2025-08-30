@@ -1,29 +1,17 @@
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://caltrain.streamlit.app)
+# Caltrain Monitor 🚂
 
-# Caltrain Platform 🚂
-
-A project that allows you to see where the Caltrain is based on the Real Time API that is used on the main Caltrain website. The data is formatted to show ETA, current location, and number of stops for the train to get to you. This way you can sit at home and sip on your ☕️ while you wait for the _very_ late train.
+This project was forked from https://github.com/tyler-simons/caltrain/tree/main with substantial customisations to fit on a home monitor. For the past year I have had Caltrain schedules posted on the wall, but when I get to the station I see the train is delayed. I wanted to be able to run something on my raspi and mini 8" monitor to let me know the status of the trains. There was no good out of the box solution, but Tyler's app was the closest. I have done modifications to it primarly related to how much data is displayed (i need it to be compact for my small monitor) and updates to reflect current API results and train numbering. Since this is a static monitor, I also have it set to just be on the "Origin" to know when I need to leave.
 
 ## Usage
 
-The app is a Streamlit app and is currently hosted [here](https://caltrain.streamlit.app). To run it locally, follow the instructions below.
+This is a local streamlit app to run on a raspi/home monitor.
 
 ## Installation
 
 To get started with the project, you will need to clone this repository and install the requirements listed in the `requirements.txt` file in the base directory folder. Here's how to do it:
 
-1. Clone the repository: `git clone https://github.com/tyler-simons/caltrain.git`
+1. Clone the repository
 2. Install the requirements: `pip install -r requirements.txt`
 
 Once you have installed the requirements, you can play around with the script locally.
 `streamlit run stcaltrain.py`
-
-# CaltrainText
-
-The `caltrain_response` folder has a set up to create a Google Cloud Function that performs a similar role to the Streamlit app.
-
-You can also deploy the function like this once you've set up your google cloud tools. See the file `deploy_caltrain_check.sh` for an example of what your deploy script could look like. You'll need to configure the options for yourself. This will deploy the function to Google Cloud, and you will be able to access it via the HTTP trigger URL provided by Google Cloud, which can trigger the Twilio function.
-
-## Contributing
-
-We welcome additions from the community. Please create an issue or make a PR to add something.
