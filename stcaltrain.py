@@ -10,7 +10,6 @@ from functions.ct_functions import (
     is_northbound,
 )
 from geopy.distance import geodesic
-import requests
 import json
 
 st.set_page_config(page_title="Caltrain Platform", page_icon="🚆", layout="wide")
