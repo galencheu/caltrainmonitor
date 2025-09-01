@@ -187,7 +187,9 @@ if API_RESPONSE_DATA is not False:
 else:
     caltrain_data = False
 
-current_time2 = datetime.datetime.now()
+# get current time in US/Pacific and format as HH:MM AM/PM
+pacific = pytz.timezone("US/Pacific")
+current_time2 = datetime.datetime.now(pacific)
 current_time = current_time2.strftime("%I:%M %p")
 
 caltrain_stations = pd.read_csv("stop_ids.csv")
