@@ -135,10 +135,13 @@ def build_caltrain_df(stopname):
     # If ETA is null, it means the train is there already, use the departure time instead
     df["ETA"] = df["ETA"].fillna(df["Departure"])
 
+    pacific = pytz.timezone("US/Pacific")
+    current_time2 = datetime.datetime.now(pacific)
+
     lt = (
         df["ETA"]
         .apply(
-            lambda x: (datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S") - datetime.datetime.now())
+            lambda x: (datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S") - current_time2)
         )
         .to_list()
     )
@@ -299,7 +302,10 @@ def get_schedule(datadirection, chosen_station, chosen_destination=None, rows_re
         old_day,
         datetime.time(old_day_time.hour, old_day_time.minute),
     )
-    weekday = True if datetime.datetime.now().weekday() < 5 else False
+    #Need to localize for streamlit servers
+    pacific = pytz.timezone("US/Pacific")
+    current_time2 = datetime.datetime.now(pacific)
+    weekday = True if current_time2.weekday() < 5 else False
 
     # Transpose the dataframe
     df = df.T.reset_index()
