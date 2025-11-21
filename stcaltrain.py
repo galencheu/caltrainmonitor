@@ -160,7 +160,7 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
 
 
     #Select columns desired
-    data = data[["Train #", "API Time", "AimedDepartureTime", "distance", "stops_away", ]] 
+    data = data[["Train #", "API Time", "AimedDepartureTime", "distance", "stopsaway2"]] 
 
     # Rename the columns
     data.columns = [
@@ -305,6 +305,20 @@ else:
         .dt.strftime("%I:%M %p")
     )
 
+    # # find the index of the min aimed departure per id
+    idx = caltrain_data.sort_values(['id','AimedDepartureTime','stop_name']).groupby('id').head(1).index
+
+    # # create a mapping id -> stop_name at that min time
+    first_stops = caltrain_data.loc[idx, ['id', 'stop_name']].set_index('id')['stop_name']
+    first_stops = caltrain_data.loc[idx, ['id', 'stop_name']].drop_duplicates(subset='id', keep='first').set_index('id')['stop_name']
+    first_stops
+    #first_stops['stop_name'] = first_stops['stop_name'].astype(str).str.replace(r'\s*Caltrain Station\s+(Northbound|Southbound)\s*$', '', regex=True, case=False).str.strip()
+
+    # # map back to the original df
+    caltrain_data['stopsaway2'] = caltrain_data['id'].map(first_stops)
+    caltrain_data['stopsaway2'] = caltrain_data['stopsaway2'].astype(str).str.replace(r'\s*Caltrain Station\s+(Northbound|Southbound)\s*$', '', regex=True, case=False).str.strip()
+    caltrain_data["stopsaway2"] = caltrain_data["stops_away"].astype(str) + " // " + caltrain_data["stopsaway2"]
+
     # Filter for destinations
     valid_destinations = [
         "San Francisco",
@@ -345,7 +359,6 @@ else:
         col1.info("No trains")
     else:
         col1.dataframe(clean_up_df(sb_data), use_container_width=True)
-
 
 # Definitions
 col1.markdown("---")
