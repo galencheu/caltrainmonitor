@@ -347,7 +347,7 @@ else:
     if nb_trains.empty:
         col1.info("No trains")
     else:
-        col1.dataframe(clean_up_df(nb_trains), use_container_width=True)
+        col1.dataframe(clean_up_df(nb_trains), width='content')
 
     # Southbound trains
     col1.subheader(f"Southbound Trains - {current_time}")
@@ -358,7 +358,7 @@ else:
     if len(sb_data) == 0:
         col1.info("No trains")
     else:
-        col1.dataframe(clean_up_df(sb_data), use_container_width=True)
+        col1.dataframe(clean_up_df(sb_data), width='content')
 
 # Definitions
 col1.markdown("---")
