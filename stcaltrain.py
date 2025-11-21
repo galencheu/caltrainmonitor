@@ -147,6 +147,7 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
     # Filter for desired columns
     #data = data[["Train #", "Departure Time", "Scheduled Time", "ETA", "distance", "stops_away"]] #Train Type
     data["ETA"] = data["ETA"].apply(lambda x: int(x.total_seconds() / 60))
+    data["delayed"] = data["ETA"].apply(lambda m: "!--I SLOW--!" if m < 0 else "")
     data["ETA"] = data["ETA"].astype("str") + " min"
     data["ScheduledETA"] = data["ScheduledETA"].apply(lambda x: int(x.total_seconds() / 60))
     data["ScheduledETA"] = data["ScheduledETA"].astype("str") + " min"
@@ -158,9 +159,8 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
     data["Scheduled Time"] = data.apply(lambda row: f"{row['Departure Time']} // Train in {row['ScheduledETA']}", axis=1)
     data["AimedDepartureTime"] = data.apply(lambda row: f"{row['AimedDepartureTime']} // Train in {row['AimedDepartureTimeETA']}", axis=1)
 
-
     #Select columns desired
-    data = data[["Train #", "API Time", "AimedDepartureTime", "distance", "stopsaway2"]] 
+    data = data[["Train #", "API Time", "AimedDepartureTime", "delayed", "stopsaway2"]] 
 
     # Rename the columns
     data.columns = [
@@ -170,7 +170,7 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
         "Scheduled Depature",
         #"Scheduled Arrival",
         #"ETA",
-        "Distance to Station",
+        "Delayed",
         "Stops Away",
         #"API Time"
     ]
@@ -271,13 +271,13 @@ if display == "Scheduled":
     nb_data = caltrain_data_nb.T
     nb_data.columns = nb_data.iloc[0]
     nb_data = nb_data.drop(nb_data.index[0])
-    col1.dataframe(nb_data, use_container_width=True)
+    col1.dataframe(nb_data, width='content')
 
     col1.subheader(f"Southbound Trains - {current_time}")
     sb_data = caltrain_data_sb.T
     sb_data.columns = sb_data.iloc[0]
     sb_data = sb_data.drop(sb_data.index[0])
-    col1.dataframe(sb_data, use_container_width=True)
+    col1.dataframe(sb_data, width='content')
 
 else:
     api_live_responsetime = API_RESPONSE_DATA["Siri"]["ServiceDelivery"]["ResponseTimestamp"]
@@ -311,13 +311,13 @@ else:
     # # create a mapping id -> stop_name at that min time
     first_stops = caltrain_data.loc[idx, ['id', 'stop_name']].set_index('id')['stop_name']
     first_stops = caltrain_data.loc[idx, ['id', 'stop_name']].drop_duplicates(subset='id', keep='first').set_index('id')['stop_name']
-    first_stops
+    
     #first_stops['stop_name'] = first_stops['stop_name'].astype(str).str.replace(r'\s*Caltrain Station\s+(Northbound|Southbound)\s*$', '', regex=True, case=False).str.strip()
 
     # # map back to the original df
     caltrain_data['stopsaway2'] = caltrain_data['id'].map(first_stops)
     caltrain_data['stopsaway2'] = caltrain_data['stopsaway2'].astype(str).str.replace(r'\s*Caltrain Station\s+(Northbound|Southbound)\s*$', '', regex=True, case=False).str.strip()
-    caltrain_data["stopsaway2"] = caltrain_data["stops_away"].astype(str) + " // " + caltrain_data["stopsaway2"]
+    caltrain_data["stopsaway2"] = caltrain_data["stops_away"].astype(str) + " // " + caltrain_data["stopsaway2"] + " // " + caltrain_data["distance"]
 
     # Filter for destinations
     valid_destinations = [
@@ -367,8 +367,8 @@ col1.markdown(
     """
 1. **API Arrival** - Expected Arrival Time of Train based on 511 API
 2. **Scheduled Depature** - Aimed Depature from Station (Should match the schedule of the train)
-3. **Distance to Station** - The distance from the train to the **Origin** station.
-4. **Stops Away** - The number of stops until the train reaches the **Origin** station.
+3. **Delayed** - Empty unless the train ETA is negative (past when it should have been at the **Origin**)
+4. **Stops Away** - The number of stops until the train reaches the **Origin** station // ~Location of Train // Distance of Train.
 """
 )
 
