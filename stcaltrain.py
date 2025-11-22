@@ -1,5 +1,6 @@
 import requests
 import pandas as pd
+import numpy as np
 import streamlit as st
 import pytz
 import datetime
@@ -147,9 +148,12 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
     # Filter for desired columns
     #data = data[["Train #", "Departure Time", "Scheduled Time", "ETA", "distance", "stops_away"]] #Train Type
     data["ETA"] = data["ETA"].apply(lambda x: int(x.total_seconds() / 60))
+    data["ETA_COMPARE"] = data["ETA"]
     data["ETA"] = data["ETA"].astype("str") + " min"
     data["ScheduledETA"] = data["ScheduledETA"].apply(lambda x: int(x.total_seconds() / 60))
-    data["delayed"] = data["ScheduledETA"].apply(lambda m: "!--  I SLOW  --!" if m < 0 else "")
+    data["ScheduledETA_COMPARE"] = data["ScheduledETA"]
+    data['delayed'] = np.where(data['ETA_COMPARE'] > data['ScheduledETA_COMPARE'] + 1, '!!!!!--  I SLOW  --!!!!!', '')
+    #data["delayed"] = data["ScheduledETA"].apply(lambda m: "!--  I SLOW  --!" if m < 0 else "")
     data["ScheduledETA"] = data["ScheduledETA"].astype("str") + " min"
     data["AimedDepartureTimeETA"] = data["AimedDepartureTimeETA"].apply(lambda x: int(x.total_seconds() / 60))
     data["AimedDepartureTimeETA"] = data["AimedDepartureTimeETA"].astype("str") + " min"
@@ -305,9 +309,16 @@ else:
         .dt.strftime("%I:%M %p")
     )
 
-    # # find the index of the min aimed departure per id
-    idx = caltrain_data.sort_values(['id','AimedDepartureTime','stop_name']).groupby('id').head(1).index
+    caltrain_data = caltrain_data.reset_index()
+    caltrain_data = caltrain_data.drop(columns=['index'])
 
+    # # find the index of the min aimed departure per id
+    idx = (caltrain_data
+        .sort_values(['id', 'aimed_arrival_time'], ascending=[True, True])
+        .groupby('id')
+        .head(1)
+        .index)
+    
     # # create a mapping id -> stop_name at that min time
     first_stops = caltrain_data.loc[idx, ['id', 'stop_name']].set_index('id')['stop_name']
     first_stops = caltrain_data.loc[idx, ['id', 'stop_name']].drop_duplicates(subset='id', keep='first').set_index('id')['stop_name']
