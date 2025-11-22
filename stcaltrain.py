@@ -147,9 +147,9 @@ def clean_up_df(data: pd.DataFrame) -> pd.DataFrame:
     # Filter for desired columns
     #data = data[["Train #", "Departure Time", "Scheduled Time", "ETA", "distance", "stops_away"]] #Train Type
     data["ETA"] = data["ETA"].apply(lambda x: int(x.total_seconds() / 60))
-    data["delayed"] = data["ETA"].apply(lambda m: "!--I SLOW--!" if m < 0 else "")
     data["ETA"] = data["ETA"].astype("str") + " min"
     data["ScheduledETA"] = data["ScheduledETA"].apply(lambda x: int(x.total_seconds() / 60))
+    data["delayed"] = data["ScheduledETA"].apply(lambda m: "!--  I SLOW  --!" if m < 0 else "")
     data["ScheduledETA"] = data["ScheduledETA"].astype("str") + " min"
     data["AimedDepartureTimeETA"] = data["AimedDepartureTimeETA"].apply(lambda x: int(x.total_seconds() / 60))
     data["AimedDepartureTimeETA"] = data["AimedDepartureTimeETA"].astype("str") + " min"
