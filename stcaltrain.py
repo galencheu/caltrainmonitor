@@ -242,12 +242,22 @@ if display == "Scheduled":
 # -------------------------------------
 else:
     api_live_responsetime = API_RESPONSE_DATA["Siri"]["ServiceDelivery"]["ResponseTimestamp"]
-    api_live_responsetime = datetime.datetime.strptime(api_live_responsetime, '%Y-%m-%dT%H:%M:%SZ') \
+    api_live_responsetime_dt = datetime.datetime.strptime(api_live_responsetime, '%Y-%m-%dT%H:%M:%SZ') \
         .replace(tzinfo=pytz.utc) \
-        .astimezone(pytz.timezone('US/Pacific')) \
-        .strftime('%I:%M %p')
+        .astimezone(pytz.timezone('US/Pacific'))
+    api_live_responsetime =  api_live_responsetime_dt.strftime('%I:%M %p')
 
-    st.info(f"✅ Caltrain API is up 🚂 (API Time: {api_live_responsetime})")
+
+    pacific = pytz.timezone("US/Pacific")
+    current_time_dt = datetime.datetime.now(pacific)
+    api_hi_time = current_time_dt + datetime.timedelta(seconds=90)
+    api_lo_time = current_time_dt - datetime.timedelta(seconds=90)
+
+    #If API time and Actual Time go out of Sync
+    if api_live_responsetime_dt < api_hi_time and api_live_responsetime_dt > api_lo_time:
+        st.info(f"✅ Caltrain API is up 🚂 (API Time: {api_live_responsetime})")
+    else:
+        st.error(f"❌ Caltrain API Time is off by {api_live_responsetime_dt - current_time_dt} minutes")
 
     caltrain_data["Train Type"] = caltrain_data["Train #"].apply(assign_train_type)
     caltrain_data["Train #"] = caltrain_data["Train #"].map(
