@@ -374,7 +374,7 @@ def get_schedule(datadirection, chosen_station, chosen_destination=None, rows_re
     df_future_wk["ETA"] = df_future_wk['time_clean'] - current_time2
     df_future_wk["ETA"] = df_future_wk["ETA"].apply(lambda td: f"{int(td.total_seconds() // 60)} mins")
     df_future_wk["Scheduled"] = df_future_wk["ETA"] + " // " + df_future_wk["time_clean"].dt.strftime("%I:%M %p")
-    df_future_wk_final = df_future_wk.drop(columns = ["time_clean", "ETA"])
+    df_future_wk_final = df_future_wk.drop(columns = ["ETA"])
 
     if datadirection == "northbound":
         df_future_wk_nb = df_future_wk_final[df_future_wk_final["label"].str.contains('Northbound', case=False)].copy()
