@@ -226,6 +226,7 @@ if display == "Scheduled":
     # NORTHBOUND
     st.subheader(f"Northbound Trains - {current_time}")
     nb_data = caltrain_data[caltrain_data["label"].str.contains('Northbound', case=False)].copy()
+    nb_data.sort_values(["Train"], inplace=True)
     nb_data = nb_data[nb_data["station"] == chosen_station].T #nb_data.T
     nb_data.columns = nb_data.iloc[0]
     st.dataframe(nb_data.drop(nb_data.index[0]), use_container_width=True)
@@ -233,6 +234,7 @@ if display == "Scheduled":
     # SOUTHBOUND
     st.subheader(f"Southbound Trains - {current_time}")
     sb_data = caltrain_data[caltrain_data["label"].str.contains('Southbound', case=False)].copy()
+    sb_data.sort_values(["Train"], inplace=True)
     sb_data = sb_data[sb_data["station"] == chosen_station].T #sb_data.T
     sb_data.columns = sb_data.iloc[0]
     st.dataframe(sb_data.drop(sb_data.index[0]), use_container_width=True)

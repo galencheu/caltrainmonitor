@@ -229,7 +229,7 @@ def ping_caltrain(station, destination):
     return ct_df
 
 
-def get_schedule(datadirection, chosen_station, chosen_destination=None): #rows_return=10):
+def get_schedule(datadirection, chosen_station, chosen_destination=None, rows_return=5):
     if chosen_destination == "--" or chosen_station == chosen_destination:
         chosen_destination = None
 
@@ -378,9 +378,9 @@ def get_schedule(datadirection, chosen_station, chosen_destination=None): #rows_
 
     if datadirection == "northbound":
         df_future_wk_nb = df_future_wk_final[df_future_wk_final["label"].str.contains('Northbound', case=False)].copy()
-        df = df_future_wk_nb
+        df = df_future_wk_nb#.head(rows_return)
     if datadirection == "southbound":
         df_future_wk_sb = df_future_wk_final[df_future_wk_final["label"].str.contains('Southbound', case=False)].copy()
-        df = df_future_wk_sb
+        df = df_future_wk_sb#.head(rows_return)
 
     return df
