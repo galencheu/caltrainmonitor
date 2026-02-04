@@ -219,25 +219,23 @@ if display == "Scheduled":
             get_schedule("southbound", chosen_station, chosen_destination)
         ])
 
-    caltrain_data = caltrain_data.sort_values(by=["Scheduled"])
-    caltrain_data["Train"] = caltrain_data["Train"].map(
+    caltrain_data = caltrain_data.sort_values(by=["ETA"])
+    caltrain_data["Train #"] = caltrain_data["Train #"].map(
         lambda c: f"{assign_train_type(c)}-{c}")
 
     # NORTHBOUND
     st.subheader(f"Northbound Trains - {current_time}")
-    nb_data = caltrain_data[caltrain_data["label"].str.contains('Northbound', case=False)].copy()
-    nb_data.sort_values(["time_clean"], inplace=True)
-    nb_data = nb_data[nb_data["station"] == chosen_station].T #nb_data.T
+    nb_data = caltrain_data.query("Direction == 'NB'").drop("Direction", axis=1)
+    nb_data = nb_data.T
     nb_data.columns = nb_data.iloc[0]
-    st.dataframe(nb_data.drop(nb_data.index[[0, 2]]), use_container_width=True)
+    st.dataframe(nb_data.drop(nb_data.index[0]), use_container_width=True)
 
     # SOUTHBOUND
     st.subheader(f"Southbound Trains - {current_time}")
-    sb_data = caltrain_data[caltrain_data["label"].str.contains('Southbound', case=False)].copy()
-    sb_data.sort_values(["time_clean"], inplace=True)
-    sb_data = sb_data[sb_data["station"] == chosen_station].T #sb_data.T
+    sb_data = caltrain_data.query("Direction == 'SB'").drop("Direction", axis=1)
+    sb_data = sb_data.T
     sb_data.columns = sb_data.iloc[0]
-    st.dataframe(sb_data.drop(sb_data.index[[0, 2]]), use_container_width=True)
+    st.dataframe(sb_data.drop(sb_data.index[0]), use_container_width=True)
 
 # -------------------------------------
 #  LIVE VIEW

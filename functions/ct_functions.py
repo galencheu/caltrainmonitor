@@ -5,7 +5,6 @@ import pytz
 import datetime
 from streamlit_extras.badges import badge
 from bs4 import BeautifulSoup
-import re
 
 def to_time(seconds):
     delta = datetime.timedelta(seconds=seconds)
@@ -243,144 +242,113 @@ def get_schedule(datadirection, chosen_station, chosen_destination=None, rows_re
     soup = BeautifulSoup(html, "lxml")
 
     # Get the table from the html
-    tables = soup.find_all("table")
+    table = soup.find(
+        "table",
+        attrs={
+            "class": "caltrain_schedule table table-striped",
+            "data-direction": datadirection,
+        },
+    )
+    table_body = table.find("tbody")
 
     # Get the rows from the table
-    table1 = tables[0]
-    table2 = tables[1]
-    table3 = tables[2]
-    table4 = tables[3]
-
-    def parse_table(table):
-        rows = table.find_all("tr")
-        table_data = []
-        for row in rows:
-            cols = row.find_all(["td", "th"])  # grab both header and data cells
-            cols = [col.get_text(strip=True) for col in cols]
-            table_data.append(cols)
-        return table_data
-
+    rows = table_body.find_all("tr")
 
     # Get the data from the rows
-    data1 = parse_table(table1)
-    data2 = parse_table(table2)
-    data3 = parse_table(table3)
-    data4 = parse_table(table4)
+    data = []
+    for row in rows:
+        cols = row.find_all("td")
+        cols = [ele.text.strip() for ele in cols]
+        data.append([ele for ele in cols if ele])
 
     # Convert the data to a dataframe
-    def table_to_df(table_data):
-        dataset_name = table_data[0][0]
-        train_numbers = table_data[1][2:]  # Train numbers start at column 2
+    df = pd.DataFrame(data)
+    # Shift the first row over by 1 to the right
+    # first_row_vals = df.iloc[0, :][:-1]                   #this no longer applies
+    # df.iloc[0, :] = ["Zone"] + first_row_vals.tolist()    #this no longer applies
 
-        station_rows = [
-            row for row in table_data[2:]
-            if any(cell.strip() for cell in row)
-        ]
+    # Drop the first column and any nas
+    df = df.drop(0, axis=1)
+    df = df = df[df.iloc[:, 0].notna()] #Remove extra rows
 
-        flattened = []
+    # Set the first column as the index
+    df.index = df[1]
 
-        for row in station_rows[2:]:
-            zone = row[0]
-            station_name = row[1]
-            times = row[2:]
+    # Make the first row the column names
+    new_header = df.iloc[0]
+    df = df[1:]
+    df.columns = new_header
 
-            for train_num, time in zip(train_numbers, times):
-                if time != '--' and time.strip() != '':
-                    flattened.append([
-                        dataset_name,
-                        zone,
-                        train_num,
-                        station_name,
-                        time
-                    ])
-        df = pd.DataFrame(
-        flattened,
-        columns=["dataset", "zone", "Train", "station", "time"]
-        )
-        return df
+    # Drop the first column
+    df = df.drop(df.columns[0], axis=1)
 
-    df1 = table_to_df(data1)
-    df2 = table_to_df(data2)
-    df3 = table_to_df(data3)
-    df4 = table_to_df(data4)
+    # Drop any columns with the value -- in the 2nd row
+    if chosen_destination:
+        df = df[[i in [chosen_station, chosen_destination] for i in df.index]]
+        df.replace("--", pd.NA, inplace=True)
+        df = df.dropna(axis=1)
 
-    # Union all four DataFrames
-    list_of_dataframes = [df1, df2, df3, df4]
-    df_union = pd.concat(list_of_dataframes, ignore_index=True)
+        # Drop the second row
+        df = df.drop(df.index[1])
+    else:
+        df = df[df.index == chosen_station]
 
-    def parse_time(time_str, next_day_cutoff=4):
-        """
-        - If the time is past midnight (hour < next_day_cutoff), it assigns date + 1.
-        - next_day_cutoff: hour threshold to consider as "next day" (default 4 AM)
-        """
-        if pd.isna(time_str):
-            return None
-        
-        # Normalize shorthand 'a'/'p' to 'am'/'pm'
-        time_str = time_str.strip().lower()
-        time_str = re.sub(r'(?<=\d)a$', 'am', time_str)
-        time_str = re.sub(r'(?<=\d)p$', 'pm', time_str)
-        
-        # Parse into datetime.time
-        t = datetime.datetime.strptime(time_str, "%I:%M%p").time()
-        
-        # Combine with today
-        dt = datetime.datetime.combine(datetime.date.today(), t)
-        
-        # If time is past midnight (hour < next_day_cutoff), add 1 day
-        if dt.hour < next_day_cutoff:
-            dt += datetime.timedelta(days=1)
-        
-        # Localize to Pacific Time
-        pacific = pytz.timezone("US/Pacific")
-        dt_pacific = pacific.localize(dt)
-        
-        return dt_pacific
-
-    def simplify_service_label(text):
-        """
-        Converts strings like:
-        'Northbound Service - Weekend Service to San Jose'
-        into:
-        'Northbound Weekend'
-        """
-        if pd.isna(text):
-            return None
-        
-        match = re.search(r'(\w+bound).*?(Weekday|Weekend)', text, re.IGNORECASE)
-        
-        if match:
-            direction = match.group(1).capitalize()
-            day_type = match.group(2).capitalize()
-            return f"{direction} {day_type}"
-        
-        return None  # or return original text if you prefer
-
-    df_union["time_clean"] = df_union["time"].apply(parse_time)
-    df_union['label'] = df_union['dataset'].apply(simplify_service_label)
-    df_clean = df_union.drop(columns=['dataset', 'time', 'zone'])
-
+    # Convert this row to the same as the other caltrain output
+    pstz = pytz.timezone("US/Pacific")
+    # utz = pytz.timezone("UTC")
+    old_day = datetime.datetime(1900, 1, 1)
+    old_day_time = datetime.datetime.now(tz=pstz).time()
+    now = datetime.datetime.combine(
+        old_day,
+        datetime.time(old_day_time.hour, old_day_time.minute),
+    )
     #Need to localize for streamlit servers
     pacific = pytz.timezone("US/Pacific")
     current_time2 = datetime.datetime.now(pacific)
-    #weekday = True if current_time2.weekday() < 5 else False
-    df_future = df_clean[df_clean["time_clean"] >= current_time2].copy()
-    df_future.sort_values(["Train", "time_clean"], inplace=True)
+    weekday = True if current_time2.weekday() < 5 else False
 
-    current_day_type = "Weekend" if current_time2.weekday() >= 5 else "Weekday"  # Saturday=5, Sunday=6
-    df_future_wk = df_future[df_future["label"].str.contains(current_day_type, case=False)].copy()
-    df_future_wk = df_future_wk[df_future_wk["time_clean"] >= current_time2].copy()
+    # Transpose the dataframe
+    df = df.T.reset_index()
+    # Drop any rows with the value -- in the 2nd column
+    df = df[df.iloc[:, 1] != "--"]
 
-    df_future_wk["ETA"] = df_future_wk['time_clean'] - current_time2
-    df_future_wk["ETA"] = df_future_wk["ETA"].apply(lambda td: f"{int(td.total_seconds() // 60)} mins")
-    df_future_wk["Scheduled"] = df_future_wk["ETA"] + " // " + df_future_wk["time_clean"].dt.strftime("%I:%M %p")
-    df_future_wk_final = df_future_wk.drop(columns = ["ETA"])
+    df.columns = ["Train #", "Departure Time"]
+    df["Direction"] = datadirection
+    # Map NB to Northbound and SB to Southbound
+    df["Direction"] = df["Direction"].map({"northbound": "NB", "southbound": "SB"})
+    df["ETA"] = [datetime.datetime.strptime(i, "%I:%M%p") for i in df["Departure Time"].tolist()]
 
-    if datadirection == "northbound":
-        df_future_wk_nb = df_future_wk_final[df_future_wk_final["label"].str.contains('Northbound', case=False)].copy()
-        df = df_future_wk_nb#.head(rows_return)
-    if datadirection == "southbound":
-        df_future_wk_sb = df_future_wk_final[df_future_wk_final["label"].str.contains('Southbound', case=False)].copy()
-        df = df_future_wk_sb#.head(rows_return)
+    # If the hour is between 12 and 4, add a day to the ETA
+    df["ETA"] = [i + datetime.timedelta(days=1) if i.hour < 4 else i for i in df["ETA"].tolist()]
 
-    return df
+    # Sort by the ETA
+    df.sort_values(by="ETA", inplace=True)
+
+    diffs = [i - now for i in df["ETA"].tolist()]
+
+    # 0 if a diff is negative
+    time_diffs = [i if i.total_seconds() > 0 else datetime.timedelta(0) for i in diffs]
+    time_diffs = [i.total_seconds() for i in time_diffs]
+
+    # Convert the time difference to a string like 00:00
+    time_diffs = [to_time(i) for i in time_diffs]
+
+    # Add the time difference to the dataframe
+    df["ETA"] = time_diffs
+
+    # Drop the trains that have already left
+    df = df[df["ETA"] != "00:00"]
+    df.reset_index(drop=True, inplace=True)
+    df.dropna(inplace=True)
+
+    # Drop any SF stations northbound
+    if chosen_station in ["San Francisco"]:
+        df = df[df["Direction"] != "NB"]
+
+    # Remove 6 trains on weekdays, 6 are weekend trains
+    if not weekday:
+        df = df[df["Train #"].str.startswith("6")]
+    else:
+        df = df[~df["Train #"].str.startswith("6")]
+
+    return df.head(rows_return)
